@@ -75,6 +75,8 @@ namespace LocoSwap
 
         private string RouteId;
         private ScenarioViewModel ViewModel;
+        private int? pendingConsistIndex;
+        private int? pendingVehicleIndex;
         private CancellationTokenSource ScanCancellationTokenSource;
         private SwapPresetWindow PresetWindow;
 
@@ -88,6 +90,27 @@ namespace LocoSwap
             ViewModel.Scenario = scenario;
             VehicleAvailibility.ClearTable();
             ReadScenario();
+        }
+
+        public void SelectConsistAndVehicle(int consistIndex, int vehicleIndex)
+        {
+            pendingConsistIndex = consistIndex;
+            pendingVehicleIndex = vehicleIndex;
+            ApplyPendingSelection();
+        }
+
+        private void ApplyPendingSelection()
+        {
+            if (pendingConsistIndex.HasValue && pendingConsistIndex.Value >= 0 && pendingConsistIndex.Value < ConsistListBox.Items.Count)
+            {
+                ConsistListBox.SelectedIndex = pendingConsistIndex.Value;
+                pendingConsistIndex = null;
+            }
+            if (pendingVehicleIndex.HasValue && pendingVehicleIndex.Value >= 0 && pendingVehicleIndex.Value < VehicleListBox.Items.Count)
+            {
+                VehicleListBox.SelectedIndex = pendingVehicleIndex.Value;
+                pendingVehicleIndex = null;
+            }
         }
 
         private bool AvailableVehicleFilter(object item)
@@ -122,6 +145,7 @@ namespace LocoSwap
                     {
                         ViewModel.Consists.Add(consist);
                     }
+                    ApplyPendingSelection();
                 });
             });
             var populateDirectoryTask = Task.Run(() =>

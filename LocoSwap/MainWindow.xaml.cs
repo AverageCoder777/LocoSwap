@@ -25,7 +25,7 @@ namespace LocoSwap
         public ObservableCollection<Route> Routes { get; } = new ObservableCollection<Route>();
         public ObservableCollection<Scenario> Scenarios { get; } = new ObservableCollection<Scenario>();
         public string WindowTitle { get; set; } = "LocoSwap";
-        public MainWindow()
+        public MainWindow(string routeId = null, string scenarioId = null)
         {
             InitializeComponent();
             UpdateColumnVisibility();
@@ -62,6 +62,27 @@ namespace LocoSwap
             watcher.EnableRaisingEvents = true;
 
             Loaded += On_MainWindow_Loaded;
+
+            if (routeId != null)
+            {
+                var selectedRoute = Routes.FirstOrDefault(r => r.Id == routeId);
+                if (selectedRoute != null)
+                {
+                    Loaded += (s, e) =>
+                    {
+                        RouteList.SelectedItem = selectedRoute;
+                        if (scenarioId != null)
+                        {
+                            var scenario = Scenarios.FirstOrDefault(sc => sc.Id == scenarioId);
+                            if (scenario != null)
+                            {
+                                ScenarioList.SelectedItem = scenario;
+                                new ScenarioEditWindow(routeId, scenario).Show();
+                            }
+                        }
+                    };
+                }
+            }
         }
 
         private void On_MainWindow_Loaded(object sender, RoutedEventArgs e)

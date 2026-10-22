@@ -97,7 +97,26 @@ namespace LocoSwap
                   )
               );
 
-            new MainWindow().Show();
+            string[] args = Environment.GetCommandLineArgs();
+            string routeId = null;
+            string scenarioId = null;
+            if (args.Length >= 2)
+            {
+                // пара routeid/scenarioid
+                routeId = args[1];
+                if (args.Length >= 3) scenarioId = args[2];
+            }
+            else if (args.Length == 1 && Directory.Exists(args[0]))
+            {
+                // путь к сценарию
+                var scenarioDir = new DirectoryInfo(args[0]);
+                scenarioId = scenarioDir.Name;
+                var routeDir = scenarioDir.Parent != null ? scenarioDir.Parent.Parent : null;
+                routeId = routeDir != null ? routeDir.Name : null;
+            }
+
+            var mainWindow = new MainWindow(routeId, scenarioId);
+            mainWindow.Show();
         }
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
