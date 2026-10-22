@@ -98,25 +98,73 @@ namespace LocoSwap
               );
 
             string[] args = Environment.GetCommandLineArgs();
+            // args[0] is exe path
+            string scenarioPath = null;
+            int? consistIndex = null;
+            int? vehicleIndex = null;
+            int i = 1;
+            while (i < args.Length)
+            {
+                if (args[i] == "--consist" && i + 1 < args.Length)
+                {
+                    int.TryParse(args[i + 1], out int ci);
+                    consistIndex = ci;
+                    i += 2;
+                    continue;
+                }
+                if (args[i] == "--vehicle" && i + 1 < args.Length)
+                {
+                    int.TryParse(args[i + 1], out int vi);
+                    vehicleIndex = vi;
+                    i += 2;
+                    continue;
+                }
+                if (scenarioPath == null)
+                {
+                    scenarioPath = args[i];
+                }
+                i++;
+            }
+
             string routeId = null;
             string scenarioId = null;
-            if (args.Length >= 2)
+            if (scenarioPath != null && Directory.Exists(scenarioPath))
+            {
+                var scenarioDir = new DirectoryInfo(scenarioPath);
+                scenarioId = scenarioDir.Name;
+                var routeDir = scenarioDir.Parent != null ? scenarioDir.Parent.Parent : null;
+                routeId = routeDir != null ? routeDir.Name : null;
+            }
+            else if (args.Length >= 2)
             {
                 // пара routeid/scenarioid
                 routeId = args[1];
                 if (args.Length >= 3) scenarioId = args[2];
             }
-            else if (args.Length == 1 && Directory.Exists(args[0]))
-            {
-                // путь к сценарию
-                var scenarioDir = new DirectoryInfo(args[0]);
-                scenarioId = scenarioDir.Name;
-                var routeDir = scenarioDir.Parent != null ? scenarioDir.Parent.Parent : null;
-                routeId = routeDir != null ? routeDir.Name : null;
-            }
 
-            var mainWindow = new MainWindow(routeId, scenarioId);
-            mainWindow.Show();
+            try
+            {
+                if (routeId != null && scenarioId != null)
+                {
+                    var scenario = new Scenario(new Route(routeId), scenarioId, "");
+                    var w = new ScenarioEditWindow(routeId, scenario);
+                    w.Show();
+                    if (consistIndex.HasValue && vehicleIndex.HasValue)
+                    {
+                        w.SelectConsistAndVehicle(consistIndex.Value, vehicleIndex.Value);
+                    }
+                }
+                else
+                {
+                    var mainWindow = new MainWindow(routeId, scenarioId, consistIndex, vehicleIndex);
+                    mainWindow.Show();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Не удалось открыть сценарий: " + ex.Message, "LocoSwap", MessageBoxButton.OK, MessageBoxImage.Error);
+                new MainWindow().Show();
+            }
         }
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)

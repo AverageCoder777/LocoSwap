@@ -25,7 +25,7 @@ namespace LocoSwap
         public ObservableCollection<Route> Routes { get; } = new ObservableCollection<Route>();
         public ObservableCollection<Scenario> Scenarios { get; } = new ObservableCollection<Scenario>();
         public string WindowTitle { get; set; } = "LocoSwap";
-        public MainWindow(string routeId = null, string scenarioId = null)
+        public MainWindow(string routeId = null, string scenarioId = null, int? consistIndex = null, int? vehicleIndex = null)
         {
             InitializeComponent();
             UpdateColumnVisibility();
@@ -77,7 +77,17 @@ namespace LocoSwap
                             if (scenario != null)
                             {
                                 ScenarioList.SelectedItem = scenario;
-                                new ScenarioEditWindow(routeId, scenario).Show();
+                                if (consistIndex.HasValue && vehicleIndex.HasValue)
+                                {
+                                    // defer selection
+                                    var w = new ScenarioEditWindow(routeId, scenario);
+                                    w.Show();
+                                    w.SelectConsistAndVehicle(consistIndex.Value, vehicleIndex.Value);
+                                }
+                                else
+                                {
+                                    new ScenarioEditWindow(routeId, scenario).Show();
+                                }
                             }
                         }
                     };
