@@ -1,11 +1,14 @@
-﻿using Ionic.Zip;
-using Serilog;
+﻿using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Windows.Media.Imaging;
 using System.Xml.Linq;
 
 namespace LocoSwap
@@ -60,32 +63,33 @@ namespace LocoSwap
 
             try
             {
-                var zipFile = ZipFile.Read(availibility.ApPath);
-                var components = availibility.PathWithinAp.Split('/');
-                var componentsList = components.ToList();
-                componentsList.RemoveAt(componentsList.Count - 1);
-                componentsList.Add("LocoInformation");
-                componentsList.Add("image.png");
-                var imageEntry = zipFile.Where(entry => entry.FileName == string.Join("/", componentsList)).FirstOrDefault();
-                if (imageEntry == null)
+                using (var zipFile = ZipFile.OpenRead(availibility.ApPath))
                 {
-                    _vehicleImageTable[xmlPath] = "/LocoSwap;component/Resources/PreviewNotAvailable.png";
-                    return _vehicleImageTable[xmlPath];
-                }
-                var extractPath = Path.Combine(
-                    Utilities.GetTempDir(),
-                    "image-" + Utilities.StaticRandom.Instance.Next(10000, 99999).ToString() + ".png");
+                    var components = availibility.PathWithinAp.Split('/');
+                    var componentsList = components.ToList();
+                    componentsList.RemoveAt(componentsList.Count - 1);
+                    componentsList.Add("LocoInformation");
+                    componentsList.Add("image.png");
+                    var imageEntry = zipFile.Entries.Where(entry => entry.FullName == string.Join("/", componentsList)).FirstOrDefault();
+                    if (imageEntry == null)
+                    {
+                        _vehicleImageTable[xmlPath] = "/LocoSwap;component/Resources/PreviewNotAvailable.png";
+                        return _vehicleImageTable[xmlPath];
+                    }
+                    var extractPath = Path.Combine(
+                        Utilities.GetTempDir(),
+                        "image-" + Utilities.StaticRandom.Instance.Next(10000, 99999).ToString() + ".png");
 
-                Utilities.RemoveFile(extractPath);
-                using (var fileStream = new FileStream(extractPath, FileMode.Create))
-                {
-                    imageEntry.Extract(fileStream);
-                    fileStream.Flush();
-                    fileStream.Close();
-                }
+                    Utilities.RemoveFile(extractPath);
+                    using (var fileStream = new FileStream(extractPath, FileMode.Create))
+                    {
+                        imageEntry.Open().CopyTo(fileStream);
+                        fileStream.Flush();
+                    }
 
-                _vehicleImageTable[xmlPath] = extractPath;
-                return extractPath;
+                    _vehicleImageTable[xmlPath] = extractPath;
+                    return extractPath;
+                }
             }
             catch (Exception e)
             {
@@ -131,15 +135,16 @@ namespace LocoSwap
                 {
                     try
                     {
-                        var zipFile = ZipFile.Read(ap);
-                        var dcsvEntry = zipFile.Where(entry => entry.FileName == string.Join("/", components.Skip(2)) + ".dcsv").FirstOrDefault();
-                        if (dcsvEntry == null) continue;
-                        dcsvPath = Path.Combine(Utilities.GetTempDir(), Path.GetFileName(dcsvPath));
-                        zipFile.FlattenFoldersOnExtract = true;
-                        Utilities.RemoveFile(dcsvPath);
-                        dcsvEntry.Extract(Utilities.GetTempDir());
-                        found = true;
-                        break;
+                        using (var zipFile = ZipFile.OpenRead(ap))
+                        {
+                            var dcsvEntry = zipFile.Entries.Where(entry => entry.FullName == string.Join("/", components.Skip(2)) + ".dcsv").FirstOrDefault();
+                            if (dcsvEntry == null) continue;
+                            dcsvPath = Path.Combine(Utilities.GetTempDir(), Path.GetFileName(dcsvPath));
+                            Utilities.RemoveFile(dcsvPath);
+                            dcsvEntry.ExtractToFile(dcsvPath, true);
+                            found = true;
+                            break;
+                        }
                     }
                     catch (Exception)
                     {
@@ -205,11 +210,12 @@ namespace LocoSwap
                     var result = false;
                     try
                     {
-                        var zipFile = ZipFile.Read(apPath);
-
-                        result = zipFile.Any(entry => entry.FileName.Equals(binName, StringComparison.OrdinalIgnoreCase));
+                        using (var zipFile = ZipFile.OpenRead(apPath))
+                        {
+                            result = zipFile.Entries.Any(entry => entry.FullName.Equals(binName, StringComparison.OrdinalIgnoreCase));
+                        }
                     }
-                    catch(ZipException)
+                    catch (InvalidDataException)
                     {
                         Debug.WriteLine("Error while reading zip file: " + apPath);
                     }

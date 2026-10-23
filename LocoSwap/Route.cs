@@ -1,9 +1,9 @@
-﻿using Ionic.Zip;
-using Serilog;
+﻿using Serilog;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
 using System.Xml.Serialization;
@@ -93,25 +93,24 @@ namespace LocoSwap
                 {
                     try
                     {
-                        ZipFile zipFile = ZipFile.Read(apPath);
-                        try
+                        using (ZipArchive zipFile = ZipFile.OpenRead(apPath))
                         {
+                            try
+                            {
 
-                            ZipEntry apEntry = zipFile.Where(entry => entry.FileName == "RouteProperties.xml").FirstOrDefault();
-                            if (apEntry == null) continue;
-                            apEntry.Extract(Utilities.GetTempDir());
-                            apFileContainingRouteProperties = apPath;
+                                ZipArchiveEntry apEntry = zipFile.Entries.Where(entry => entry.FullName == "RouteProperties.xml").FirstOrDefault();
+                                if (apEntry == null) continue;
+                                string extractPath = Path.Combine(Utilities.GetTempDir(), "RouteProperties.xml");
+                                apEntry.ExtractToFile(extractPath, true);
+                                apFileContainingRouteProperties = apPath;
 
-                            IsArchived = apPath.EndsWith(".LSoff");
-                            break;
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Error("Error while reading " + apPath + ", " + e.Message);
-                        }
-                        finally
-                        {
-                            zipFile.Dispose();
+                                IsArchived = apPath.EndsWith(".LSoff");
+                                break;
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error("Error while reading " + apPath + ", " + e.Message);
+                            }
                         }
                     }
                     catch(Exception e)
@@ -247,11 +246,13 @@ namespace LocoSwap
                 string[] apFiles = Directory.GetFiles(RouteDirectory, "*.ap", SearchOption.TopDirectoryOnly);
                 foreach (string apPath in apFiles)
                 {
-                    ZipFile zipFile = ZipFile.Read(apPath);
-                    ZipEntry apEntry = zipFile.Where(entry => entry.FileName == "RouteProperties.xml").FirstOrDefault();
-                    zipFile.Dispose();
-
-                    if (apEntry != null)
+                    bool containsRouteProperties = false;
+                    using (ZipArchive zipFile = ZipFile.OpenRead(apPath))
+                    {
+                        ZipArchiveEntry apEntry = zipFile.Entries.Where(entry => entry.FullName == "RouteProperties.xml").FirstOrDefault();
+                        containsRouteProperties = apEntry != null;
+                    }
+                    if (containsRouteProperties)
                     {
                         if (File.Exists(apPath + ".LSoff"))
                         {

@@ -1,5 +1,4 @@
 ﻿using LocoSwap.Properties;
-using Microsoft.WindowsAPICodePack.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -33,27 +32,24 @@ namespace LocoSwap
             var valid = false;
             while (!valid)
             {
-                using (var dialog = new CommonOpenFileDialog())
-                {
-                    dialog.Title = Language.Resources.select_ts_path;
-                    dialog.IsFolderPicker = true;
+                var dialog = new Microsoft.Win32.OpenFolderDialog();
+                dialog.Title = Language.Resources.select_ts_path;
 
-                    var result = dialog.ShowDialog();
-                    if (result != CommonFileDialogResult.Ok)
-                    {
-                        return false;
-                    }
-                    var path = dialog.FileName;
-                    var tsExe = Path.Combine(path, "RailWorks.exe");
-                    if (!File.Exists(tsExe))
-                    {
-                        MessageBox.Show(Language.Resources.msg_ts_path_invalid, Language.Resources.msg_error, MessageBoxButton.OK, MessageBoxImage.Warning);
-                        continue;
-                    }
-                    Settings.Default.TsPath = path;
-                    Settings.Default.Save();
-                    valid = true;
+                var result = dialog.ShowDialog();
+                if (result != true)
+                {
+                    return false;
                 }
+                var path = dialog.FolderName;
+                var tsExe = Path.Combine(path, "RailWorks.exe");
+                if (!File.Exists(tsExe))
+                {
+                    MessageBox.Show(Language.Resources.msg_ts_path_invalid, Language.Resources.msg_error, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    continue;
+                }
+                Settings.Default.TsPath = path;
+                Settings.Default.Save();
+                valid = true;
             }
             return true;
         }

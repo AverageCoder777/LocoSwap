@@ -1,14 +1,15 @@
-﻿using Ionic.Zip;
-using LocoSwap.Properties;
+﻿using LocoSwap.Properties;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using System.Xml.Serialization;
 using System.Xml.XPath;
 
 namespace LocoSwap
@@ -130,15 +131,17 @@ namespace LocoSwap
             {
                 if (ApFileName != "")
                 {
-                    ZipFile apFile = ZipFile.Read(ApFileName);
+                    using (ZipArchive apFile = ZipFile.OpenRead(ApFileName))
+                    {
+                        ZipArchiveEntry scenarioPropertiesFile = apFile.Entries.Where(file => file.FullName == "Scenarios/" + id + "/ScenarioProperties.xml").FirstOrDefault();
 
-                    ZipEntry scenarioPropertiesFile = apFile.Where(file => file.FileName == "Scenarios/" + id + "/ScenarioProperties.xml").FirstOrDefault();
-
-                    MemoryStream ms = new MemoryStream();
-                    scenarioPropertiesFile.Extract(ms);
-                    apFile.Dispose();
-                    ms.Position = 0;
-                    ScenarioProperties = XDocument.Parse(new StreamReader(ms).ReadToEnd());
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            scenarioPropertiesFile.Open().CopyTo(ms);
+                            ms.Position = 0;
+                            ScenarioProperties = XDocument.Parse(new StreamReader(ms).ReadToEnd());
+                        }
+                    }
                 }
                 else
                 {
@@ -243,16 +246,17 @@ namespace LocoSwap
             }
             else
             {
-                ZipFile apFile = ZipFile.Read(ApFileName);
-                apFile.FlattenFoldersOnExtract = true;
-                ZipEntry binEntry = apFile.Where(entry => entry.FileName == "Scenarios/" + Id + "/Scenario.bin").FirstOrDefault();
-                if (binEntry == null)
+                using (ZipArchive apFile = ZipFile.OpenRead(ApFileName))
                 {
-                    throw new Exception("Unable to load scenario: bin file not found within .ap file " + ApFileName + " and Id " + Id);
+                    ZipArchiveEntry binEntry = apFile.Entries.Where(entry => entry.FullName == "Scenarios/" + Id + "/Scenario.bin").FirstOrDefault();
+                    if (binEntry == null)
+                    {
+                        throw new Exception("Unable to load scenario: bin file not found within .ap file " + ApFileName + " and Id " + Id);
+                    }
+                    string extractPath = Path.Combine(Utilities.GetTempDir(), "Scenario.bin");
+                    binEntry.ExtractToFile(extractPath, true);
+                    scenarioBinDir = Utilities.GetTempDir();
                 }
-                binEntry.Extract(Utilities.GetTempDir(), ExtractExistingFileAction.OverwriteSilently);
-                scenarioBinDir = Utilities.GetTempDir();
-                apFile.Dispose();
             }
 
             ScenarioXml = TsSerializer.Load(Path.Combine(scenarioBinDir, "Scenario.bin"));
@@ -829,11 +833,21 @@ namespace LocoSwap
                 // If scenario is inside an AP, we extract the scenario dir
                 try
                 {
-                    ZipFile apFile = ZipFile.Read(ApFileName);
-
-                    apFile.ExtractSelectedEntries("*", "Scenarios/" + Id + "/", Route.GetRouteDirectory(RouteId), ExtractExistingFileAction.OverwriteSilently);
-
-                    apFile.Dispose();
+                    using (ZipArchive apFile = ZipFile.OpenRead(ApFileName))
+                    {
+                        string destDir = Route.GetRouteDirectory(RouteId);
+                        string prefix = "Scenarios/" + Id + "/";
+                        foreach (ZipArchiveEntry entry in apFile.Entries)
+                        {
+                            if (entry.FullName.StartsWith(prefix) && !string.IsNullOrEmpty(entry.Name))
+                            {
+                                string relativePath = entry.FullName.Substring(prefix.Length);
+                                string destPath = Path.Combine(destDir, "Scenarios", Id, relativePath);
+                                Directory.CreateDirectory(Path.GetDirectoryName(destPath));
+                                entry.ExtractToFile(destPath, true);
+                            }
+                        }
+                    }
                 }
                 catch (Exception)
                 {

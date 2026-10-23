@@ -1,4 +1,4 @@
-﻿using Ionic.Zip;
+﻿using System.IO.Compression;
 using LocoSwap.Properties;
 using Serilog;
 using System;
@@ -164,33 +164,31 @@ namespace LocoSwap
             string[] apFiles = Directory.GetFiles(routeDirectory, "*", SearchOption.TopDirectoryOnly).Where(file => allowedExtensions.Any(file.EndsWith)).ToArray();
             foreach (string apPath in apFiles)
             {
-
                 try
                 {
-                    ZipFile zipFile = ZipFile.Read(apPath);
-                    try
+                    using (ZipArchive zipFile = ZipFile.OpenRead(apPath))
                     {
-
-
-                        Regex scenarioPropFileRegex = new Regex(@"^(Scenarios/([a-f\d\-]{36})/)ScenarioProperties\.xml$");
-                        foreach (ZipEntry file in zipFile)
+                        try
                         {
-                            Match match = scenarioPropFileRegex.Match(file.FileName);
-                            if (match.Success &&
-                                zipFile.Select(file2 => file2.FileName == match.Groups[1].Value + "Scenario.bin").Count() > 0 &&
-                                !File.Exists(Path.Combine(routeDirectory, "Scenarios", match.Groups[2].Value, "ScenarioProperties.xml")))
+
+
+
+                            Regex scenarioPropFileRegex = new Regex(@"^(Scenarios/([a-f\d\-]{36})/)ScenarioProperties\.xml$");
+                            foreach (ZipArchiveEntry file in zipFile.Entries)
                             {
-                                Scenarios.Add(new Scenario(route, match.Groups[2].Value, apPath));
+                                Match match = scenarioPropFileRegex.Match(file.FullName);
+                                if (match.Success &&
+                                    zipFile.Entries.Any(file2 => file2.FullName == match.Groups[1].Value + "Scenario.bin") &&
+                                    !File.Exists(Path.Combine(routeDirectory, "Scenarios", match.Groups[2].Value, "ScenarioProperties.xml")))
+                                {
+                                    Scenarios.Add(new Scenario(route, match.Groups[2].Value, apPath));
+                                }
                             }
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error("Error while reading " + apPath + " for scenarios, " + e.Message);
-                    }
-                    finally
-                    {
-                        zipFile.Dispose();
+                        catch (Exception e)
+                        {
+                            Log.Error("Error while reading " + apPath + " for scenarios, " + e.Message);
+                        }
                     }
                 }
 

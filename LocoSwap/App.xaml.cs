@@ -105,6 +105,11 @@ namespace LocoSwap
             int i = 1;
             while (i < args.Length)
             {
+                if (args[i] == "--edit-only")
+                {
+                    i++;
+                    continue;
+                }
                 if (args[i] == "--consist" && i + 1 < args.Length)
                 {
                     int.TryParse(args[i + 1], out int ci);

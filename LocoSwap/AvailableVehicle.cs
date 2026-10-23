@@ -1,10 +1,11 @@
-﻿using Ionic.Zip;
-using Serilog;
+﻿using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Windows;
 using System.Xml.Linq;
 
 namespace LocoSwap
@@ -59,23 +60,27 @@ namespace LocoSwap
             string actualBinPath = Path.Combine(Properties.Settings.Default.TsPath, "Assets", binPath);
             if (selfAvalibility.InApFile)
             {
-                var zipFile = ZipFile.Read(selfAvalibility.ApPath);
-                var binEntry = zipFile.Where(entry => entry.FileName == selfAvalibility.PathWithinAp).FirstOrDefault();
-                if (binEntry == null)
+                using (var zipFile = ZipFile.OpenRead(selfAvalibility.ApPath))
                 {
-                    throw new Exception("Unable to load vehicle: bin file not found within .ap file");
+                    var binEntry = zipFile.Entries.Where(entry => entry.FullName == selfAvalibility.PathWithinAp).FirstOrDefault();
+                    if (binEntry == null)
+                    {
+                        throw new Exception("Unable to load vehicle: bin file not found within .ap file");
+                    }
+                    var baseName = Path.GetFileNameWithoutExtension(selfAvalibility.PathWithinAp);
+                    var tempName = string.Format("{0}-{1}.bin", baseName, Utilities.StaticRandom.Instance.Next(10000, 99999));
+                    actualBinPath = Path.Combine(Utilities.GetTempDir(), tempName);
+                    Utilities.RemoveFile(actualBinPath);
+                    using (var fileStream = new FileStream(actualBinPath, FileMode.Create))
+                    {
+                        using (var entryStream = binEntry.Open())
+                        {
+                            entryStream.CopyTo(fileStream);
+                        }
+                        fileStream.Flush();
+                    }
+                    Log.Debug("Extract to {0}", actualBinPath);
                 }
-                var baseName = Path.GetFileNameWithoutExtension(selfAvalibility.PathWithinAp);
-                var tempName = string.Format("{0}-{1}.bin", baseName, Utilities.StaticRandom.Instance.Next(10000, 99999));
-                actualBinPath = Path.Combine(Utilities.GetTempDir(), tempName);
-                Utilities.RemoveFile(actualBinPath);
-                using (var fileStream = new FileStream(actualBinPath, FileMode.Create))
-                {
-                    binEntry.Extract(fileStream);
-                    fileStream.Flush();
-                    fileStream.Close();
-                }
-                Log.Debug("Extract to {0}", actualBinPath);
             }
 
             XDocument document;
@@ -149,7 +154,7 @@ namespace LocoSwap
                 catch (Exception e)
                 {
                     Log.Debug("Exception caught loading main vehicle: {0}", e.Message);
-                    throw e;
+                    throw;
                 }
 
                 Log.Debug("After loading main vehicle: Type={0}, EntityCount={1}, CargoCount={2}", Type, EntityCount, CargoCount);

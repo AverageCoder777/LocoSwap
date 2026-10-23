@@ -1,18 +1,20 @@
-﻿using Ionic.Zip;
-using LocoSwap.Properties;
-using Serilog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using LocoSwap.Language;
+using LocoSwap.Properties;
+using Serilog;
 
 namespace LocoSwap
 {
@@ -348,41 +350,42 @@ namespace LocoSwap
                 foreach (var item in apFiles.Select((value, i) => (value, i)))
                 {
                     Log.Debug("Trying ap file {0}", item.value);
-                    var zipFile = ZipFile.Read(item.value);
-                    var binEntries = zipFile.Where(entry => { return entry.FileName.ToLower().StartsWith("railvehicles/") && entry.FileName.EndsWith(".bin"); }).ToList();
-
-                    if (!binEntries.Any())
+                    using (var zipFile = ZipFile.OpenRead(item.value))
                     {
-                        binEntries = zipFile.Where(entry => { return entry.FileName.EndsWith(".bin"); }).ToList();
-                    }
+                        var binEntries = zipFile.Entries.Where(entry => { return entry.FullName.ToLower().StartsWith("railvehicles/") && entry.FullName.EndsWith(".bin"); }).ToList();
 
-                    var baseProgress = (int)Math.Ceiling((float)item.i / apFiles.Count() * 100);
-                    var basePath = Path.GetDirectoryName(item.value).Replace(Settings.Default.TsPath + "\\Assets\\", "");
-                    var binCount = binEntries.Count();
-                    Log.Debug("There are {0} bin entries", binCount);
-                    Parallel.ForEach(binEntries.Select((value, i) => (value, i)), (binItem) =>
-                    {
-                        var binEntry = binItem.value;
-                        var binPath = Path.Combine(basePath, binEntry.FileName.Replace('/', '\\'));
-                        try
+                        if (!binEntries.Any())
                         {
-                            Log.Debug("Try {0}", binPath);
-                            var vehicle = new AvailableVehicle(binPath);
-                            App.Current.Dispatcher.Invoke((Action)delegate
+                            binEntries = zipFile.Entries.Where(entry => { return entry.FullName.EndsWith(".bin"); }).ToList();
+                        }
+
+                        var baseProgress = (int)Math.Ceiling((float)item.i / apFiles.Count() * 100);
+                        var basePath = Path.GetDirectoryName(item.value).Replace(Settings.Default.TsPath + "\\Assets\\", "");
+                        var binCount = binEntries.Count();
+                        Log.Debug("There are {0} bin entries", binCount);
+                        Parallel.ForEach(binEntries.Select((value, i) => (value, i)), (binItem) =>
+                        {
+                            var binEntry = binItem.value;
+                            var binPath = Path.Combine(basePath, binEntry.FullName.Replace('/', '\\'));
+                            try
                             {
-                                ViewModel.AvailableVehicles.Add(vehicle);
-                            });
-                        }
-                        catch (Exception)
-                        {
+                                Log.Debug("Try {0}", binPath);
+                                var vehicle = new AvailableVehicle(binPath);
+                                App.Current.Dispatcher.Invoke((Action)delegate
+                                {
+                                    ViewModel.AvailableVehicles.Add(vehicle);
+                                });
+                            }
+                            catch (Exception)
+                            {
 
-                        }
+                            }
 
-                        var ownProgress = (int)Math.Ceiling((float)binItem.i / binCount * 100 / apFiles.Count());
-                        progress.Report(baseProgress + ownProgress);
-                        token.ThrowIfCancellationRequested();
-                    });
-                    zipFile.Dispose();
+                            var ownProgress = (int)Math.Ceiling((float)binItem.i / binCount * 100 / apFiles.Count());
+                            progress.Report(baseProgress + ownProgress);
+                            token.ThrowIfCancellationRequested();
+                        });
+                    }
                     token.ThrowIfCancellationRequested();
                 }
             }, token);
@@ -575,7 +578,7 @@ namespace LocoSwap
 
             }
 
-            VehicleNumberSelectionWindow window = new VehicleNumberSelectionWindow(list, VehicleNumberSelectionWindow.WindowType.Selection, string.Copy(vehicle.Number));
+            VehicleNumberSelectionWindow window = new VehicleNumberSelectionWindow(list, VehicleNumberSelectionWindow.WindowType.Selection, vehicle.Number);
             window.ShowDialog();
 
             if (window.DialogResult == true)
